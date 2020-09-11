@@ -23,18 +23,23 @@ func getNotes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var notes []Note
+
 	result, err := db.Query("SELECT * FROM notes")
 	if err != nil {
-		panic(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "database query error"}`))
+		return
 	}
 
 	defer result.Close()
 
 	for result.Next() {
 		var note Note
-		err := result.Scan(&note.Id, &note.Title, &note.Body, &note.Timestamp)
+		err := result.Scan(&note.Id, &note.Title, &note.Body, &note.WrittenOn)
 		if err != nil {
-			panic(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error": "database data error"}`))
+			return
 		}
 		notes = append(notes, note)
 	}
@@ -60,16 +65,25 @@ func createNote(w http.ResponseWriter, r *http.Request) {
 
 	stmt, err := db.Prepare("INSERT INTO notes VALUES(?, ?, ?, ?)")
 	if err != nil {
-		panic(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "error preparing database query"}`))
+		return
 	}
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		panic(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "error reading request body"}`))
+		return
 	}
 
 	keyVal := make(map[string]string)
-	json.Unmarshal(body, &keyVal)
+	err := json.Unmarshal(body, &keyVal)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "error unmarshalling"}`))
+		return
+	}
 	id := keyVal["id"]
 	title := keyVal["title"]
 	noteBody := keyVal["body"]
@@ -77,12 +91,13 @@ func createNote(w http.ResponseWriter, r *http.Request) {
 
 	result, err := stmt.Exec(id, title, noteBody, writtenOn)
 	if err != nil {
-		panic(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "error executing database query"}`))
+		return
 	}
 
-	json.
-
-
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"success": "created"}"`))
 }
 
 func main() {
